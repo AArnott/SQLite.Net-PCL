@@ -1,6 +1,5 @@
 using NUnit.Framework;
 using SQLite.Net.Attributes;
-using SQLite.Net.Platform.Win32;
 
 namespace SQLite.Net.Tests
 {
@@ -18,9 +17,9 @@ namespace SQLite.Net.Tests
 
         public class TestDb : SQLiteConnection
         {
-            public TestDb() : base(new SQLitePlatformWin32(), TestPath.GetTempFileName())
+            public TestDb() : base(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase())
             {
-                Trace = true;
+                TraceListener = DebugTraceListener.Instance;
             }
         }
 

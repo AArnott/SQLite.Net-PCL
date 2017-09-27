@@ -1,22 +1,42 @@
 using System;
 using System.IO;
+using System.Threading.Tasks;
+using PCLStorage;
 using SQLite.Net.Attributes;
-using SQLite.Net.Platform.Win32;
 
 namespace SQLite.Net.Tests
 {
-    public class Product
+    [Table("Product")]
+    public interface IProduct
+    {
+        [AutoIncrement, PrimaryKey]
+        int Id { get; set; }
+
+        string Name { get; set; }
+        decimal Price { get; set; }
+        uint TotalSales { get; set; }
+    }
+
+    public class Product : IProduct
     {
         [AutoIncrement, PrimaryKey]
         public int Id { get; set; }
 
         public string Name { get; set; }
         public decimal Price { get; set; }
-
         public uint TotalSales { get; set; }
     }
 
-    public class Order
+    [Table("Order")]
+    public interface IOrder
+    {
+        [AutoIncrement, PrimaryKey]
+        int Id { get; set; }
+
+        DateTime PlacedTime { get; set; }
+    }
+
+    public class Order : IOrder
     {
         [AutoIncrement, PrimaryKey]
         public int Id { get; set; }
@@ -24,7 +44,18 @@ namespace SQLite.Net.Tests
         public DateTime PlacedTime { get; set; }
     }
 
-    public class OrderHistory
+    [Table("OrderHistory")]
+    public interface IOrderHistory
+    {
+        [AutoIncrement, PrimaryKey]
+        int Id { get; set; }
+
+        int OrderId { get; set; }
+        DateTime Time { get; set; }
+        string Comment { get; set; }
+    }
+
+    public class OrderHistory : IOrderHistory
     {
         [AutoIncrement, PrimaryKey]
         public int Id { get; set; }
@@ -34,7 +65,24 @@ namespace SQLite.Net.Tests
         public string Comment { get; set; }
     }
 
-    public class OrderLine
+    [Table("OrderLine")]
+    public interface IOrderLine
+    {
+        [AutoIncrement, PrimaryKey]
+        int Id { get; set; }
+
+        [Indexed("IX_OrderProduct", 1)]
+        int OrderId { get; set; }
+
+        [Indexed("IX_OrderProduct", 2)]
+        int ProductId { get; set; }
+
+        int Quantity { get; set; }
+        decimal UnitPrice { get; set; }
+        OrderLineStatus Status { get; set; }
+    }
+
+    public class OrderLine : IOrderLine
     {
         [AutoIncrement, PrimaryKey]
         public int Id { get; set; }
@@ -58,18 +106,33 @@ namespace SQLite.Net.Tests
 
     public class TestDb : SQLiteConnection
     {
-        public TestDb(bool storeDateTimeAsTicks = false)
-            : base(new SQLitePlatformWin32(), TestPath.GetTempFileName(), storeDateTimeAsTicks)
-        {
-            Trace = true;
-        }
+        public TestDb(bool storeDateTimeAsTicks = true, IContractResolver resolver = null)
+            : base(
+                new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase(), storeDateTimeAsTicks, null,
+                extraTypeMappings: null,
+                resolver: resolver)
+		{
+            TraceListener = DebugTraceListener.Instance;
+		}
     }
 
     public class TestPath
     {
-        public static string GetTempFileName()
+        public static string CreateTemporaryDatabase(string fileName = null)
         {
-            return Path.GetTempFileName();
+            var desiredName = fileName ?? CreateDefaultTempFilename() + ".db";
+            var localStorage = FileSystem.Current.LocalStorage;
+            if (localStorage.CheckExistsAsync("temp").Result != ExistenceCheckResult.FolderExists)
+            {
+                localStorage.CreateFolderAsync("temp", CreationCollisionOption.OpenIfExists).Wait();
+            }
+            IFolder tempFolder = localStorage.GetFolderAsync("temp").Result;
+            return tempFolder.CreateFileAsync(desiredName, CreationCollisionOption.FailIfExists).Result.Path;
+        }
+
+        public static Guid CreateDefaultTempFilename()
+        {
+            return Guid.NewGuid();
         }
     }
 }

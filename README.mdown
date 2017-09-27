@@ -1,9 +1,58 @@
+[![Build status](https://ci.appveyor.com/api/projects/status/ujwbkk2bp3ipnoxg?svg=true)](https://ci.appveyor.com/project/oysteinkrog/sqlite-net-pcl)
+
+This project is no longer actively maintained!
+
 # Fork
 
 This is a fork of the original sqlite-net library (https://github.com/praeclarum/sqlite-net), which aims to improve the code quality by using modern technologies such as PCL (portable class library).
 
 The project will avoid the use of #if-based conditional code and use platform-specific code injection instead.
 
+I welcome pull requests, but keep in mind that this library is in heavy use and all changes must be:
+- Backwards-compatible (don't change database defaults).
+- Well tested (please add unit tests).
+
+# Versioning
+
+This project uses semantic versioning.
+
+# API Changes
+
+As part of the cleanup there are now some API changes.
+For the most part I hope these are self-explanatory, but here is a non-exhaustive list of changes.
+
+## SQLiteConnection
+You now have to pass in an implementation of ISQlitePlatform in the SQLiteConnectionWithLock and SQLiteConnection constructors.
+The correct platform implementation is automatically added to the project. 
+
+At the moment these platforms are supported:
+- Win32 (bundles sqlite binaries for windows, works on both x86 and x64 automatically) (very well tested)
+- XamarinIOS and XamarinIOS.Unified
+- XamarinAndroid
+- WindowsPhone8 (contributed by Nick Cipollina, thanks!)
+- WinRT (Windows 8 and Windows Phone 8.1+) (contributed by Nick Cipollina and Micah Lewis, thanks!)
+- Generic (net4 project without any sqlite3 binaries, requires sqlite installed in the OS) (contributed by James Ottaway)
+
+Note: 
+To use the WP8.1/WinRT platform you must install the "SQLite for Windows Phone"/"SQLite for Windows" VSIX extension. 
+Then, in the project, add a reference to the extension (in the Extensions section of the Add Reference dialog)
+If you have problems with signed apps take a look here: https://github.com/oysteinkrog/SQLite.Net-PCL/issues/25
+
+## SQliteAsyncConnection
+The SQLiteAsyncConnection class now takes a Func<SQLiteConnectionWithLock> in the constructor instead of a path.
+This is done because the async classes are now just meant to be wrappers around the normal sqlite connection.
+
+To use SQLiteAsyncConnection just create an instance of a SQLiteConnectionWithLock and pass in that through a func, e.g.:
+new SQLiteAsyncConnection(()=>_sqliteConnectionWithLock);
+
+Please be aware that the Task.Run pattern used in SQLiteAsyncConnection can be considered an anti-pattern (libraries should not provide async methods unless they are truly async).
+This class is maintained for backwards compatability and for use-cases where async-isolation is handy.
+
+## DateTime serialization
+
+DateTime serialization is changed, in order to be consistent.
+When using the storeDateTimeAsTicks option, the DateTime is now serialized as Utc, and the returned DateTime is also in Utc.
+You can get the local time by using dateTime.ToLocalTime()
 
 # SQLite.Net
 
@@ -36,7 +85,7 @@ This is an open source project that welcomes contributions/suggestions/bug repor
 
 # Example Time!
 
-Please consult the Wiki for, ahem, [complete documentation](https://github.com/praeclarum/SQLite.Net/wiki).
+Please consult the source code (see unit tests) for more examples.
 
 The library contains simple attributes that you can use to control the construction of tables. In a simple stock program, you might use:
 
@@ -68,7 +117,7 @@ Both APIs are explained in the two sections below.
 
 Once you have defined your entity, you can automatically generate tables in your database by calling `CreateTable`:
 
-    var db = new SQLiteConnection("foofoo");
+    var db = new SQLiteConnection(sqlitePlatform, "foofoo");
     db.CreateTable<Stock>();
     db.CreateTable<Valuation>();
 
@@ -85,7 +134,7 @@ Similar methods exist for `Update` and `Delete`.
 
 The most straightforward way to query for data is using the `Table` method. This can take predicates for constraining via WHERE clauses and/or adding ORDER BY clauses:
 
-		var conn = new SQLiteConnection("foofoo");
+		var conn = new SQLiteConnection(sqlitePlatform, "foofoo");
 		var query = conn.Table<Stock>().Where(v => v.Symbol.StartsWith("A"));
 
 		foreach (var stock in query)
@@ -118,7 +167,7 @@ will work for you.
 
 Once you have defined your entity, you can automatically generate tables by calling `CreateTableAsync`:
 
-	var conn = new SQLiteAsyncConnection("foofoo");
+	var conn = new SQLiteAsyncConnection(()=>sqliteConnection, "foofoo");
 	conn.CreateTableAsync<Stock>().ContinueWith((results) =>
 	{
 		Debug.WriteLine("Table created!");
@@ -131,7 +180,7 @@ You can insert rows in the database using `Insert`. If the table contains an aut
 			Symbol = "AAPL"
 		};
 
-		var conn = new SQLiteAsyncConnection("foofoo");
+		var conn = new SQLiteAsyncConnection(()=>sqliteConnection, "foofoo");
 		conn.InsertAsync(stock).ContinueWith((t) =>
 		{
 			Debug.WriteLine("New customer ID: {0}", stock.Id);
@@ -143,7 +192,7 @@ Querying for data is most straightforwardly done using the `Table` method. This 
 you can add predictates for constraining via WHERE clauses and/or adding ORDER BY. The database is not physically touched until one of the special 
 retrieval methods - `ToListAsync`, `FirstAsync`, or `FirstOrDefaultAsync` - is called.
 
-		var conn = new SQLiteAsyncConnection("foofoo");
+		var conn = new SQLiteAsyncConnection(()=>sqliteConnection, "foofoo");
 		var query = conn.Table<Stock>().Where(v => v.Symbol.StartsWith("A"));
 			
 		query.ToListAsync().ContinueWith((t) =>
@@ -164,14 +213,3 @@ Another helpful method is `ExecuteScalarAsync`. This allows you to return a scal
 		});
 
 
-## Special note on use within Windows Store Apps (Windows 8/WinRT)
-
-SQLite.Net is fully compliant with WinRT Metro-style apps and will pass Microsoft Store validation.
-
-Please note:
-
-* Database files will always be created in the path returned by `Windows.Storage.ApplicationData.Current.LocalFolder.Path`.
-
-* You will need a copy of sqlite3.dll for your app as well.  You can get this from sqlite.org with an installer to the SQLite for Windows Runtime SDK.
-
- 

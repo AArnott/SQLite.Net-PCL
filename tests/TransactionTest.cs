@@ -2,8 +2,24 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
+using PCLStorage;
 using SQLite.Net.Attributes;
-using SQLite.Net.Platform.Win32;
+
+#if __WIN32__
+using SQLitePlatformTest = SQLite.Net.Platform.Win32.SQLitePlatformWin32;
+#elif WINDOWS_PHONE
+using SQLitePlatformTest = SQLite.Net.Platform.WindowsPhone8.SQLitePlatformWP8;
+#elif __WINRT__
+using SQLitePlatformTest = SQLite.Net.Platform.WinRT.SQLitePlatformWinRT;
+#elif __IOS__
+using SQLitePlatformTest = SQLite.Net.Platform.XamarinIOS.SQLitePlatformIOS;
+#elif __ANDROID__
+using SQLitePlatformTest = SQLite.Net.Platform.XamarinAndroid.SQLitePlatformAndroid;
+#elif __OSX__
+using SQLitePlatformTest = SQLite.Net.Platform.OSX.SQLitePlatformOSX;
+#else
+using SQLitePlatformTest = SQLite.Net.Platform.Generic.SQLitePlatformGeneric;
+#endif
 
 namespace SQLite.Net.Tests
 {
@@ -15,7 +31,7 @@ namespace SQLite.Net.Tests
         {
             testObjects = Enumerable.Range(1, 20).Select(i => new TestObj()).ToList();
 
-            db = new TestDb(TestPath.GetTempFileName());
+            db = new TestDb(TestPath.CreateTemporaryDatabase());
             db.InsertAll(testObjects);
         }
 
@@ -49,7 +65,7 @@ namespace SQLite.Net.Tests
         public class TestDb : SQLiteConnection
         {
             public TestDb(String path)
-                : base(new SQLitePlatformWin32(), path)
+                : base(new SQLitePlatformTest(), path)
             {
                 CreateTable<TestObj>();
             }

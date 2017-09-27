@@ -1,4 +1,4 @@
-//
+﻿//
 // Copyright (c) 2012 Krueger Systems, Inc.
 // Copyright (c) 2013 Øystein Krog (oystein.krog@gmail.com)
 // 
@@ -22,8 +22,9 @@
 //
 
 using System;
-using System.Diagnostics;
+using JetBrains.Annotations;
 using SQLite.Net.Interop;
+using System.Diagnostics;
 
 namespace SQLite.Net
 {
@@ -32,74 +33,92 @@ namespace SQLite.Net
     /// </summary>
     public class PreparedSqlLiteInsertCommand : IDisposable
     {
-        internal static readonly IDbStatement NullStatement = default(IDbStatement);
-        private readonly ISQLitePlatform _sqlitePlatform;
+        private static readonly IDbStatement NullStatement = default(IDbStatement);
 
-        internal PreparedSqlLiteInsertCommand(ISQLitePlatform platformImplementation, SQLiteConnection conn)
+        internal PreparedSqlLiteInsertCommand(SQLiteConnection conn)
         {
-            _sqlitePlatform = platformImplementation;
             Connection = conn;
         }
 
+        [PublicAPI]
         public bool Initialized { get; set; }
 
-        protected SQLiteConnection Connection { get; set; }
-
+        [PublicAPI]
         public string CommandText { get; set; }
 
+        [PublicAPI]
+        protected SQLiteConnection Connection { get; set; }
+
+        [PublicAPI]
         protected IDbStatement Statement { get; set; }
 
+        [PublicAPI]
         public void Dispose()
         {
             Dispose(true);
             GC.SuppressFinalize(this);
         }
 
+        ~PreparedSqlLiteInsertCommand()
+        {
+            Dispose(false);
+        }
+
+        static readonly object _locker = new object();
+
+        [PublicAPI]
         public int ExecuteNonQuery(object[] source)
         {
-            if (Connection.Trace)
-            {
-                Debug.WriteLine("Executing: " + CommandText);
-            }
-
-            var r = Result.OK;
-
+            Connection.TraceListener.WriteLine("Executing: {0}", CommandText);
             if (!Initialized)
             {
                 Statement = Prepare();
                 Initialized = true;
             }
 
+            var sqlitePlatform = Connection.Platform;
             //bind the values.
             if (source != null)
             {
-                for (int i = 0; i < source.Length; i++)
+                for (var i = 0; i < source.Length; i++)
                 {
-                    SQLiteCommand.BindParameter(_sqlitePlatform.SQLiteApi, Statement, i + 1, source[i],
-                        Connection.StoreDateTimeAsTicks);
+                    SQLiteCommand.BindParameter(sqlitePlatform.SQLiteApi, Statement, i + 1, source[i],
+                        Connection.StoreDateTimeAsTicks, Connection.Serializer);
                 }
             }
-            r = _sqlitePlatform.SQLiteApi.Step(Statement);
+
+            Result r;
+            lock (_locker)
+            {
+                r = sqlitePlatform.SQLiteApi.Step(Statement);
+            }
 
             if (r == Result.Done)
             {
-                int rowsAffected = _sqlitePlatform.SQLiteApi.Changes(Connection.Handle);
-                _sqlitePlatform.SQLiteApi.Reset(Statement);
+                var rowsAffected = sqlitePlatform.SQLiteApi.Changes(Connection.Handle);
+                sqlitePlatform.SQLiteApi.Reset(Statement);
                 return rowsAffected;
             }
             if (r == Result.Error)
             {
-                string msg = _sqlitePlatform.SQLiteApi.Errmsg16(Connection.Handle);
-                _sqlitePlatform.SQLiteApi.Reset(Statement);
+                var msg = sqlitePlatform.SQLiteApi.Errmsg16(Connection.Handle);
+                sqlitePlatform.SQLiteApi.Reset(Statement);
                 throw SQLiteException.New(r, msg);
             }
-            _sqlitePlatform.SQLiteApi.Reset(Statement);
+            if (r == Result.Constraint && sqlitePlatform.SQLiteApi.ExtendedErrCode(Connection.Handle) == ExtendedResult.ConstraintNotNull)
+            {
+                sqlitePlatform.SQLiteApi.Reset(Statement);
+                throw NotNullConstraintViolationException.New(r, sqlitePlatform.SQLiteApi.Errmsg16(Connection.Handle));
+            }
+            sqlitePlatform.SQLiteApi.Reset(Statement);
+
             throw SQLiteException.New(r, r.ToString());
         }
 
+        [PublicAPI]
         protected virtual IDbStatement Prepare()
         {
-            IDbStatement stmt = _sqlitePlatform.SQLiteApi.Prepare2(Connection.Handle, CommandText);
+            var stmt = Connection.Platform.SQLiteApi.Prepare2(Connection.Handle, CommandText);
             return stmt;
         }
 
@@ -109,7 +128,7 @@ namespace SQLite.Net
             {
                 try
                 {
-                    _sqlitePlatform.SQLiteApi.Finalize(Statement);
+                    Connection.Platform.SQLiteApi.Finalize(Statement);
                 }
                 finally
                 {
@@ -117,11 +136,6 @@ namespace SQLite.Net
                     Connection = null;
                 }
             }
-        }
-
-        ~PreparedSqlLiteInsertCommand()
-        {
-            Dispose(false);
         }
     }
 }

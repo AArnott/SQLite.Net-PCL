@@ -21,10 +21,12 @@
 //
 
 using System;
+using JetBrains.Annotations;
 
 namespace SQLite.Net.Attributes
 {
-    [AttributeUsage(AttributeTargets.Class)]
+    [PublicAPI]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface)]
     public class TableAttribute : Attribute
     {
         public TableAttribute(string name)

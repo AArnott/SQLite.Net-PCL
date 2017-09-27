@@ -3,7 +3,6 @@ using System.Linq;
 using NUnit.Framework;
 using SQLite.Net.Attributes;
 using SQLite.Net.Interop;
-using SQLite.Net.Platform.Win32;
 
 namespace SQLite.Net.Tests
 {
@@ -42,11 +41,11 @@ namespace SQLite.Net.Tests
                     Name = i.ToString()
                 };
 
-            var db = new TestDb(new SQLitePlatformWin32(), TestPath.GetTempFileName());
+            var db = new TestDb(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
 
             db.InsertAll(cq);
 
-            db.Trace = true;
+            db.TraceListener = DebugTraceListener.Instance;
 
             var tensq = new[] {"0", "10", "20"};
             List<TestObj> tens = (from o in db.Table<TestObj>() where tensq.Contains(o.Name) select o).ToList();
@@ -67,11 +66,11 @@ namespace SQLite.Net.Tests
                     Name = i.ToString()
                 };
 
-            var db = new TestDb(new SQLitePlatformWin32(), TestPath.GetTempFileName());
+            var db = new TestDb(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
 
             db.InsertAll(cq);
 
-            db.Trace = true;
+            db.TraceListener = DebugTraceListener.Instance;
 
             var tensq = new[] {"0", "10", "20"};
             List<TestObj> tens = (from o in db.Table<TestObj>() where tensq.Contains(o.Name) select o).ToList();

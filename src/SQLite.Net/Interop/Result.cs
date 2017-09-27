@@ -1,5 +1,10 @@
+using System.Diagnostics.CodeAnalysis;
+using JetBrains.Annotations;
+
 namespace SQLite.Net.Interop
 {
+    [PublicAPI]
+    [SuppressMessage("ReSharper", "InconsistentNaming")]
     public enum Result
     {
         OK = 0,
@@ -29,6 +34,8 @@ namespace SQLite.Net.Interop
         Format = 24,
         Range = 25,
         NonDBFile = 26,
+        Notice = 27,
+        Warning = 28,
         Row = 100,
         Done = 101
     }

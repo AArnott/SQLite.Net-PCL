@@ -4,7 +4,6 @@ using System.Diagnostics;
 using System.Linq;
 using NUnit.Framework;
 using SQLite.Net.Attributes;
-using SQLite.Net.Platform.Win32;
 
 namespace SQLite.Net.Tests
 {
@@ -14,7 +13,7 @@ namespace SQLite.Net.Tests
         [SetUp]
         public void Setup()
         {
-            _db = new TestDb(TestPath.GetTempFileName());
+            _db = new TestDb(TestPath.CreateTemporaryDatabase());
         }
 
         [TearDown]
@@ -69,7 +68,7 @@ namespace SQLite.Net.Tests
         public class TestDb : SQLiteConnection
         {
             public TestDb(String path)
-                : base(new SQLitePlatformWin32(), path)
+                : base(new SQLitePlatformTest(), path)
             {
                 CreateTable<TestObj>();
                 CreateTable<TestObj2>();
@@ -88,7 +87,7 @@ namespace SQLite.Net.Tests
                     Text = "I am"
                 };
             TestObj[] objs = q.ToArray();
-            _db.Trace = false;
+            _db.TraceListener = DebugTraceListener.Instance;
 
             var sw = new Stopwatch();
             sw.Start();
@@ -205,7 +204,7 @@ namespace SQLite.Net.Tests
         [Test]
         public void InsertOrReplace()
         {
-            _db.Trace = true;
+            _db.TraceListener = DebugTraceListener.Instance;
             _db.InsertAll(from i in Enumerable.Range(1, 20)
                 select new TestObj
                 {
@@ -224,6 +223,31 @@ namespace SQLite.Net.Tests
             List<TestObj> r = (from x in _db.Table<TestObj>() orderby x.Id select x).ToList();
             Assert.AreEqual(20, r.Count);
             Assert.AreEqual("Foo", r[4].Text);
+        }
+
+        [Test]
+        public void InsertOrIgnore()
+        {
+            _db.TraceListener = DebugTraceListener.Instance;
+            _db.InsertOrIgnoreAll(from i in Enumerable.Range(1, 20)
+                select new TestObj2
+                {
+                    Id = i,
+                    Text = "#" + i
+                });
+
+            Assert.AreEqual(20, _db.Table<TestObj2>().Count());
+
+            var t = new TestObj2
+            {
+                Id = 5,
+                Text = "Foo",
+            };
+            _db.InsertOrIgnore(t);
+
+            List<TestObj2> r = (from x in _db.Table<TestObj2>() orderby x.Id select x).ToList();
+            Assert.AreEqual(20, r.Count);
+            Assert.AreEqual("#5", r[4].Text);
         }
 
         [Test]

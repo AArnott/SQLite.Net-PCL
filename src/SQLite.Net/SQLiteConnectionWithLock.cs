@@ -21,7 +21,9 @@
 // THE SOFTWARE.
 
 using System;
+using System.Collections.Generic;
 using System.Threading;
+using JetBrains.Annotations;
 using SQLite.Net.Interop;
 
 namespace SQLite.Net
@@ -30,11 +32,15 @@ namespace SQLite.Net
     {
         private readonly object _lockPoint = new object();
 
-        public SQLiteConnectionWithLock(ISQLitePlatform sqlitePlatform, SQLiteConnectionString connectionString)
-            : base(sqlitePlatform, connectionString.DatabasePath, connectionString.StoreDateTimeAsTicks)
-        {
-        }
+        [PublicAPI]
+        public SQLiteConnectionWithLock([NotNull] ISQLitePlatform sqlitePlatform, 
+                                        [NotNull] SQLiteConnectionString connectionString, 
+                                        IDictionary<string, TableMapping> tableMappings = null, 
+                                        IDictionary<Type, string> extraTypeMappings = null)
+            : base(sqlitePlatform, connectionString.DatabasePath, connectionString.OpenFlags, connectionString.StoreDateTimeAsTicks, connectionString.Serializer, tableMappings, extraTypeMappings, connectionString.Resolver) { }
 
+
+        [PublicAPI]
         public IDisposable Lock()
         {
             return new LockWrapper(_lockPoint);
@@ -44,7 +50,7 @@ namespace SQLite.Net
         {
             private readonly object _lockPoint;
 
-            public LockWrapper(object lockPoint)
+            public LockWrapper([NotNull] object lockPoint)
             {
                 _lockPoint = lockPoint;
                 Monitor.Enter(_lockPoint);

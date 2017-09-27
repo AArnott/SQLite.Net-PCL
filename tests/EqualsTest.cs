@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using SQLite.Net.Attributes;
-using SQLite.Net.Platform.Win32;
 
 namespace SQLite.Net.Tests
 {
@@ -27,7 +26,7 @@ namespace SQLite.Net.Tests
         public class TestDb : SQLiteConnection
         {
             public TestDb(String path)
-                : base(new SQLitePlatformWin32(), path)
+                : base(new SQLitePlatformTest(), path)
             {
                 CreateTable<TestObjString>();
             }
@@ -44,7 +43,7 @@ namespace SQLite.Net.Tests
                     Date = new DateTime(2013, 1, i)
                 };
 
-            var db = new TestDb(TestPath.GetTempFileName());
+            var db = new TestDb(TestPath.CreateTemporaryDatabase());
             db.InsertAll(cq);
 
             TableQuery<TestObjString> results = db.Table<TestObjString>().Where(o => o.Data.Equals("10"));

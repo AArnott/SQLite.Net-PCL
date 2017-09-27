@@ -3,7 +3,6 @@ using System.Diagnostics;
 using NUnit.Framework;
 using SQLite.Net.Attributes;
 using SQLite.Net.Interop;
-using SQLite.Net.Platform.Win32;
 
 namespace SQLite.Net.Tests
 {
@@ -29,7 +28,7 @@ namespace SQLite.Net.Tests
             public DbAcs(ISQLitePlatform sqlitePlatform, String path)
                 : base(sqlitePlatform, path)
             {
-                Trace = true;
+                TraceListener = DebugTraceListener.Instance;
             }
 
             public void buildTable()
@@ -47,8 +46,8 @@ namespace SQLite.Net.Tests
         [Test]
         public void TestBoolean()
         {
-            var sqlite3Platform = new SQLitePlatformWin32();
-            string tmpFile = TestPath.GetTempFileName();
+            var sqlite3Platform = new SQLitePlatformTest();
+            string tmpFile = TestPath.CreateTemporaryDatabase();
             var db = new DbAcs(sqlite3Platform, tmpFile);
             db.buildTable();
             for (int i = 0; i < 10; i++)

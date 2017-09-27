@@ -2,7 +2,6 @@ using System.Linq;
 using NUnit.Framework;
 using SQLite.Net.Attributes;
 using SQLite.Net.Interop;
-using SQLite.Net.Platform.Win32;
 
 namespace SQLite.Net.Tests
 {
@@ -41,18 +40,18 @@ namespace SQLite.Net.Tests
         public class TestDb : SQLiteConnection
         {
             public TestDb(ISQLitePlatform sqlitePlatform)
-                : base(sqlitePlatform, TestPath.GetTempFileName())
+                : base(sqlitePlatform, TestPath.CreateTemporaryDatabase())
             {
                 CreateTable<Product>();
                 CreateTable<OrderLine>();
-                Trace = true;
+                TraceListener = DebugTraceListener.Instance;
             }
         }
 
         [Test]
         public void CreateThem()
         {
-            var db = new TestDb(new SQLitePlatformWin32());
+            var db = new TestDb(new SQLitePlatformTest());
 
             var foo = new Product
             {

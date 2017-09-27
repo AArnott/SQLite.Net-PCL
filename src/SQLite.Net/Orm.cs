@@ -25,19 +25,28 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using JetBrains.Annotations;
 using SQLite.Net.Attributes;
+using NotNullAttribute = SQLite.Net.Attributes.NotNullAttribute;
 
 namespace SQLite.Net
 {
-    public static class Orm
+    internal static class Orm
     {
-        public const int DefaultMaxStringLength = 140;
         public const string ImplicitPkName = "Id";
         public const string ImplicitIndexSuffix = "Id";
 
-        public static string SqlDecl(TableMapping.Column p, bool storeDateTimeAsTicks)
+		private static IColumnInformationProvider _columnInformationProvider = new DefaultColumnInformationProvider();
+		public static IColumnInformationProvider ColumnInformationProvider 
+		{
+			get { return _columnInformationProvider; }
+			set { _columnInformationProvider = value; }
+		}
+
+		internal static string SqlDecl(TableMapping.Column p, bool storeDateTimeAsTicks, IBlobSerializer serializer,
+			IDictionary<Type, string> extraTypeMappings)
         {
-            string decl = "\"" + p.Name + "\" " + SqlType(p, storeDateTimeAsTicks) + " ";
+            var decl = "\"" + p.Name + "\" " + SqlType(p, storeDateTimeAsTicks, serializer, extraTypeMappings) + " ";
 
             if (p.IsPK)
             {
@@ -55,86 +64,126 @@ namespace SQLite.Net
             {
                 decl += "collate " + p.Collation + " ";
             }
+            if (p.DefaultValue != null)
+            {
+                decl += "default('" + p.DefaultValue + "') ";
+            }
 
             return decl;
         }
 
-        public static string SqlType(TableMapping.Column p, bool storeDateTimeAsTicks)
+        private static string SqlType(TableMapping.Column p, bool storeDateTimeAsTicks,
+            IBlobSerializer serializer,
+            IDictionary<Type, string> extraTypeMappings)
         {
-            Type clrType = p.ColumnType;
-            if (clrType == typeof (Boolean) || clrType == typeof (Byte) || clrType == typeof (UInt16) ||
-                clrType == typeof (SByte) || clrType == typeof (Int16) || clrType == typeof (Int32))
+            var clrType = p.ColumnType;
+            var interfaces = clrType.GetTypeInfo().ImplementedInterfaces.ToList();
+
+            string extraMapping;
+            if (extraTypeMappings.TryGetValue(clrType, out extraMapping))
+            {
+                return extraMapping;
+            }
+
+            if (clrType == typeof (bool) || clrType == typeof (byte) || clrType == typeof (ushort) ||
+                clrType == typeof (sbyte) || clrType == typeof (short) || clrType == typeof (int) ||
+                clrType == typeof (uint) || clrType == typeof (long) ||
+                interfaces.Contains(typeof (ISerializable<bool>)) ||
+                interfaces.Contains(typeof (ISerializable<byte>)) ||
+                interfaces.Contains(typeof (ISerializable<ushort>)) ||
+                interfaces.Contains(typeof (ISerializable<sbyte>)) ||
+                interfaces.Contains(typeof (ISerializable<short>)) ||
+                interfaces.Contains(typeof (ISerializable<int>)) ||
+                interfaces.Contains(typeof (ISerializable<uint>)) ||
+                interfaces.Contains(typeof (ISerializable<long>)) ||
+                interfaces.Contains(typeof (ISerializable<ulong>)))
             {
                 return "integer";
             }
-            if (clrType == typeof (UInt32) || clrType == typeof (Int64))
-            {
-                return "bigint";
-            }
-            if (clrType == typeof (Single) || clrType == typeof (Double) || clrType == typeof (Decimal))
+            if (clrType == typeof (float) || clrType == typeof (double) || clrType == typeof (decimal) ||
+                interfaces.Contains(typeof (ISerializable<float>)) ||
+                interfaces.Contains(typeof (ISerializable<double>)) ||
+                interfaces.Contains(typeof (ISerializable<decimal>)))
             {
                 return "float";
             }
-            if (clrType == typeof (String))
+            if (clrType == typeof (string) || interfaces.Contains(typeof (ISerializable<string>)))
             {
-                int len = p.MaxStringLength;
-                return "varchar(" + len + ")";
+                var len = p.MaxStringLength;
+
+                if (len.HasValue)
+                {
+                    return "varchar(" + len.Value + ")";
+                }
+
+                return "varchar";
             }
-            if (clrType == typeof (DateTime))
+            if (clrType == typeof (TimeSpan) || interfaces.Contains(typeof (ISerializable<TimeSpan>)))
+            {
+                return "bigint";
+            }
+            if (clrType == typeof (DateTime) || interfaces.Contains(typeof (ISerializable<DateTime>)))
             {
                 return storeDateTimeAsTicks ? "bigint" : "datetime";
             }
-            if (clrType.IsEnum)
+            if (clrType == typeof (DateTimeOffset))
+            {
+                return "bigint";
+            }
+            if (clrType.GetTypeInfo().IsEnum)
             {
                 return "integer";
             }
-            if (clrType == typeof (byte[]))
+            if (clrType == typeof (byte[]) || interfaces.Contains(typeof (ISerializable<byte[]>)))
             {
                 return "blob";
             }
-            if (clrType == typeof (Guid))
+            if (clrType == typeof (Guid) || interfaces.Contains(typeof (ISerializable<Guid>)))
             {
                 return "varchar(36)";
+            }
+            if (serializer != null && serializer.CanDeserialize(clrType))
+            {
+                return "blob";
             }
             throw new NotSupportedException("Don't know about " + clrType);
         }
 
-        public static bool IsPK(MemberInfo p)
+        internal static bool IsPK(MemberInfo p)
         {
-            object[] attrs = p.GetCustomAttributes(typeof (PrimaryKeyAttribute), true);
-            return attrs.Length > 0;
+			return ColumnInformationProvider.IsPK (p);
         }
 
-        public static string Collation(MemberInfo p)
+        internal static string Collation(MemberInfo p)
         {
-            object[] attrs = p.GetCustomAttributes(typeof (CollationAttribute), true);
-            if (attrs.Length > 0)
-            {
-                return ((CollationAttribute) attrs[0]).Value;
-            }
-            return string.Empty;
+			return ColumnInformationProvider.Collation (p);
         }
 
-        public static bool IsAutoInc(MemberInfo p)
+        internal static bool IsAutoInc(MemberInfo p)
         {
-            object[] attrs = p.GetCustomAttributes(typeof (AutoIncrementAttribute), true);
-            return attrs.Length > 0;
+			return ColumnInformationProvider.IsAutoInc (p);
         }
 
-        public static IEnumerable<IndexedAttribute> GetIndices(MemberInfo p)
+        internal static IEnumerable<IndexedAttribute> GetIndices(MemberInfo p)
         {
-            object[] attrs = p.GetCustomAttributes(typeof (IndexedAttribute), true);
-            return attrs.Cast<IndexedAttribute>();
+			return ColumnInformationProvider.GetIndices (p);
         }
 
-        public static int MaxStringLength(PropertyInfo p)
+        [CanBeNull]
+        internal static int? MaxStringLength(PropertyInfo p)
         {
-            object[] attrs = p.GetCustomAttributes(typeof (MaxLengthAttribute), true);
-            if (attrs.Length > 0)
-            {
-                return ((MaxLengthAttribute) attrs[0]).Value;
-            }
-            return DefaultMaxStringLength;
+			return ColumnInformationProvider.MaxStringLength (p);
+        }
+
+        [CanBeNull]
+        internal static object GetDefaultValue(PropertyInfo p)
+        {
+			return ColumnInformationProvider.GetDefaultValue (p);
+        }
+
+        internal static bool IsMarkedNotNull(MemberInfo p)
+        {
+			return ColumnInformationProvider.IsMarkedNotNull (p);
         }
     }
 }

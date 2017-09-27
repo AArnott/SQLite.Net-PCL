@@ -1,7 +1,6 @@
 ﻿using System.Linq;
 using NUnit.Framework;
 using SQLite.Net.Attributes;
-using SQLite.Net.Platform.Win32;
 
 namespace SQLite.Net.Tests
 {
@@ -69,10 +68,60 @@ namespace SQLite.Net.Tests
         }
 
         [Test]
+        public void NullableScalarInt()
+        {
+            var db = new SQLiteConnection(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
+            db.CreateTable<NullableIntClass>();
+
+            var withNull = new NullableIntClass
+            {
+                NullableInt = null
+            };
+            var with0 = new NullableIntClass
+            {
+                NullableInt = 0
+            };
+            var with1 = new NullableIntClass
+            {
+                NullableInt = 1
+            };
+            var withMinus1 = new NullableIntClass
+            {
+                NullableInt = -1
+            };
+
+            db.Insert(withNull);
+            db.Insert(with0);
+            db.Insert(with1);
+            db.Insert(withMinus1);
+
+            var actualShouldBeNull   = db.ExecuteScalar<int?>("select NullableInt from NullableIntClass order by ID limit 1");
+            var actualShouldBe0      = db.ExecuteScalar<int?>("select NullableInt from NullableIntClass order by ID limit 1 offset 1");
+            var actualShouldBe1      = db.ExecuteScalar<int?>("select NullableInt from NullableIntClass order by ID limit 1 offset 2");
+            var actualShouldBeMinus1 = db.ExecuteScalar<int?>("select NullableInt from NullableIntClass order by ID limit 1 offset 3");
+
+            Assert.AreEqual(null, actualShouldBeNull);
+            Assert.AreEqual(0, actualShouldBe0);
+            Assert.AreEqual(1, actualShouldBe1);
+            Assert.AreEqual(-1, actualShouldBeMinus1);
+        }
+
+        [Test]
+        public void NullableSumTest()
+        {
+            SQLiteConnection db = new TestDb();
+            db.CreateTable<NullableIntClass>();
+
+            var r = db.ExecuteScalar<int>("SELECT SUM(NullableInt) FROM NullableIntClass WHERE 1 = 0");
+
+            Assert.AreEqual(0, r);
+        }
+
+        [Test]
         [Description("Create a table with a nullable int column then insert and select against it")]
         public void NullableFloat()
         {
-            var db = new SQLiteConnection(new SQLitePlatformWin32(), TestPath.GetTempFileName());
+            var db = new SQLiteConnection(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
             db.CreateTable<NullableFloatClass>();
 
             var withNull = new NullableFloatClass
@@ -111,7 +160,7 @@ namespace SQLite.Net.Tests
         [Description("Create a table with a nullable int column then insert and select against it")]
         public void NullableInt()
         {
-            var db = new SQLiteConnection(new SQLitePlatformWin32(), TestPath.GetTempFileName());
+            var db = new SQLiteConnection(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
             db.CreateTable<NullableIntClass>();
 
             var withNull = new NullableIntClass
@@ -149,7 +198,7 @@ namespace SQLite.Net.Tests
         [Test]
         public void NullableString()
         {
-            var db = new SQLiteConnection(new SQLitePlatformWin32(), TestPath.GetTempFileName());
+            var db = new SQLiteConnection(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
             db.CreateTable<StringClass>();
 
             var withNull = new StringClass
@@ -181,7 +230,7 @@ namespace SQLite.Net.Tests
         [Test]
         public void StringWhereNotNull()
         {
-            var db = new SQLiteConnection(new SQLitePlatformWin32(), TestPath.GetTempFileName());
+            var db = new SQLiteConnection(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
             db.CreateTable<StringClass>();
 
             var withNull = new StringClass
@@ -211,7 +260,7 @@ namespace SQLite.Net.Tests
         [Test]
         public void StringWhereNull()
         {
-            var db = new SQLiteConnection(new SQLitePlatformWin32(), TestPath.GetTempFileName());
+            var db = new SQLiteConnection(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
             db.CreateTable<StringClass>();
 
             var withNull = new StringClass
@@ -240,7 +289,7 @@ namespace SQLite.Net.Tests
         [Test]
         public void WhereNotNull()
         {
-            var db = new SQLiteConnection(new SQLitePlatformWin32(), TestPath.GetTempFileName());
+            var db = new SQLiteConnection(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
             db.CreateTable<NullableIntClass>();
 
             var withNull = new NullableIntClass
@@ -278,7 +327,7 @@ namespace SQLite.Net.Tests
         [Test]
         public void WhereNull()
         {
-            var db = new SQLiteConnection(new SQLitePlatformWin32(), TestPath.GetTempFileName());
+            var db = new SQLiteConnection(new SQLitePlatformTest(), TestPath.CreateTemporaryDatabase());
             db.CreateTable<NullableIntClass>();
 
             var withNull = new NullableIntClass
